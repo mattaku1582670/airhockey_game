@@ -1229,6 +1229,238 @@ function init() {
   checkOrientation();
 }
 document.addEventListener('DOMContentLoaded', init);
+
+// ========== PEERJS ==========
+let peer = null;
+let conn = null;
+let lastSyncTime = 0;
+const SYNC_INTERVAL = 1000 / CONFIG.SYNC_HZ;
+
+function sendToGuest(data) {
+  if (conn && conn.open) {
+    try { conn.send(data); } catch (e) {}
+  }
+}
+
+function sendToHost(data) {
+  if (conn && conn.open) {
+    try { conn.send(data); } catch (e) {}
+  }
+}
+
+function onConnectionEstablished() {
+  hideDisconnect();
+  showConnectStep('connected');
+  setTimeout(() => {
+    showScreen('game');
+    initCanvas();
+    if (state.role === 'host' && typeof startGame === 'function') {
+      startGame();
+    }
+    if (typeof startGameLoop === 'function') {
+      startGameLoop();
+    } else {
+      render();
+    }
+  }, CONFIG.CONNECTED_SHOW_MS);
+}
+
+function showDisconnect() {
+  document.getElementById('disconnect-msg').classList.add('active');
+}
+
+function hideDisconnect() {
+  document.getElementById('disconnect-msg').classList.remove('active');
+}
+
+function startHost() {
+  if (peer) {
+    try { peer.destroy(); } catch (e) {}
+  }
+  peer = null;
+  conn = null;
+
+  state.role = 'host';
+  const code = String(Math.floor(1000 + Math.random() * 9000));
+  const peerId = 'air-' + code;
+
+  peer = new Peer(peerId);
+
+  peer.on('open', () => {
+    displayRoomCode(code);
+    showConnectStep('hostWait');
+  });
+
+  peer.on('connection', (connection) => {
+    if (conn && conn.open) {
+      connection.close();
+      return;
+    }
+
+    conn = connection;
+    conn.on('open', onConnectionEstablished);
+    conn.on('data', handleGuestMessage);
+    conn.on('close', showDisconnect);
+    conn.on('error', showDisconnect);
+  });
+
+  peer.on('error', (err) => {
+    if (err.type === 'unavailable-id') {
+      try { peer.destroy(); } catch (e) {}
+      peer = null;
+      setTimeout(startHost, 200);
+    } else {
+      console.error('PeerJS error:', err);
+    }
+  });
+
+  peer.on('disconnected', () => {
+    if (state.screen === 'game') showDisconnect();
+  });
+}
+
+function connectAsGuest(code) {
+  if (peer) {
+    try { peer.destroy(); } catch (e) {}
+  }
+  peer = null;
+  conn = null;
+
+  state.role = 'guest';
+  state.roomCode = code;
+  const peerId = 'air-' + code;
+
+  peer = new Peer();
+
+  peer.on('open', () => {
+    conn = peer.connect(peerId, {
+      reliable: false,
+      serialization: 'json',
+    });
+
+    conn.on('open', onConnectionEstablished);
+    conn.on('data', handleHostMessage);
+    conn.on('close', showDisconnect);
+    conn.on('error', (err) => {
+      if (err && err.type === 'peer-unavailable') {
+        alert('あいことばが ちがうかも...もういちど たしかめてね');
+        state.inputDigits = [];
+        updateInputSlots();
+        showConnectStep('guestInput');
+      } else {
+        showDisconnect();
+      }
+    });
+  });
+
+  peer.on('error', (err) => {
+    if (err.type === 'peer-unavailable') {
+      alert('あいことばが ちがうかも...もういちど たしかめてね');
+      state.inputDigits = [];
+      updateInputSlots();
+      showConnectStep('guestInput');
+    } else {
+      console.error('PeerJS error:', err);
+    }
+  });
+
+  peer.on('disconnected', () => {
+    if (state.screen === 'game') showDisconnect();
+  });
+}
+
+function broadcastState() {
+  if (state.role !== 'host') return;
+  const now = performance.now();
+  if (now - lastSyncTime < SYNC_INTERVAL) return;
+  lastSyncTime = now;
+
+  sendToGuest({
+    t: 'state',
+    puck: { x: state.puck.x, y: state.puck.y },
+    mallet: { x: state.malletHost.x, y: state.malletHost.y },
+    score: { host: state.score.host, guest: state.score.guest },
+    phase: state.phase,
+    goalSide: state.goalSide,
+    winner: state.winner,
+  });
+}
+
+function handleGuestMessage(data) {
+  if (!data || typeof data !== 'object') return;
+  if (data.t === 'mallet') {
+    onGuestMalletUpdate(data.x, data.y);
+  }
+}
+
+function handleHostMessage(data) {
+  if (!data || typeof data !== 'object') return;
+  if (data.t === 'state') {
+    onStateReceived(data);
+  }
+}
+
+function onGuestMalletUpdate(x, y) {
+  state.malletGuest.x = x;
+  state.malletGuest.y = y;
+}
+
+function onStateReceived(data) {
+  state.puckTarget.x = data.puck.x;
+  state.puckTarget.y = data.puck.y;
+  state.malletHost.x = data.mallet.x;
+  state.malletHost.y = data.mallet.y;
+  state.score.host = data.score.host;
+  state.score.guest = data.score.guest;
+
+  if (data.phase !== state.phase) {
+    state.phase = data.phase;
+    if (data.phase === 'goal') {
+      state.goalSide = data.goalSide;
+      if (typeof startGoalAnimation === 'function') {
+        startGoalAnimation();
+      }
+    } else if (data.phase === 'result') {
+      state.winner = data.winner;
+      if (typeof showResult === 'function') {
+        showResult();
+      }
+    }
+  }
+
+  updateScoreBar();
+}
+
+function disconnect() {
+  hideDisconnect();
+  if (conn) {
+    try { conn.close(); } catch (e) {}
+  }
+  if (peer) {
+    try { peer.destroy(); } catch (e) {}
+  }
+  peer = null;
+  conn = null;
+  lastSyncTime = 0;
+  state.phase = 'waiting';
+  state.screen = 'connect';
+  state.connectStep = 'choose';
+  state.role = null;
+  state.roomCode = '';
+  state.inputDigits = [];
+  updateInputSlots();
+  displayRoomCode('');
+  showScreen('connect');
+  showConnectStep('choose');
+}
+
+document.getElementById('btn-reconnect').addEventListener('click', disconnect);
+document.getElementById('btn-host').addEventListener('click', startHost);
+document.getElementById('btn-guest').addEventListener('click', () => {
+  state.inputDigits = [];
+  updateInputSlots();
+  showConnectStep('guestInput');
+});
 </script>
 </body>
 </html>
