@@ -1452,6 +1452,174 @@ document.getElementById('btn-guest').addEventListener('click', () => {
   updateInputSlots();
   showConnectStep('guestInput');
 });
+
+// ========== PHYSICS (HOST ONLY) ==========
+let prevMalletHost = { x: state.malletHost.x, y: state.malletHost.y };
+let prevMalletGuest = { x: state.malletGuest.x, y: state.malletGuest.y };
+
+function startGame() {
+  state.score = { host: 0, guest: 0 };
+  state.phase = 'playing';
+  state.winner = null;
+  state.goalSide = null;
+  prevMalletHost = { x: state.malletHost.x, y: state.malletHost.y };
+  prevMalletGuest = { x: state.malletGuest.x, y: state.malletGuest.y };
+  resetPuck();
+  updateScoreBar();
+}
+
+function resetPuck() {
+  state.puck.x = 0.5;
+  state.puck.y = 0.5;
+  const angle = (Math.random() * 0.52 - 0.26) + (Math.random() > 0.5 ? 0 : Math.PI);
+  state.puck.vx = Math.cos(angle) * CONFIG.PUCK_INIT_SPEED;
+  state.puck.vy = Math.sin(angle) * CONFIG.PUCK_INIT_SPEED;
+}
+
+function updatePhysics() {
+  if (state.role !== 'host') return;
+  if (state.phase !== 'playing') return;
+  if (!canvasW || !canvasH) return;
+
+  const p = state.puck;
+  const { leftGoalWidth, rightGoalWidth } = getGoalConfig();
+  const GOAL_DEPTH_NORM = 50 / canvasW;
+
+  p.vx *= CONFIG.PUCK_FRICTION;
+  p.vy *= CONFIG.PUCK_FRICTION;
+
+  const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+  if (speed > 0 && speed < CONFIG.PUCK_MIN_SPEED) {
+    const scale = CONFIG.PUCK_MIN_SPEED / speed;
+    p.vx *= scale;
+    p.vy *= scale;
+  }
+
+  p.x += p.vx;
+  p.y += p.vy;
+
+  const padY = 10 / canvasH;
+  const padX = 10 / canvasW;
+  const r = CONFIG.PUCK_RADIUS;
+
+  if (p.y - r < padY) {
+    p.y = padY + r;
+    p.vy = Math.abs(p.vy);
+  }
+  if (p.y + r > 1 - padY) {
+    p.y = 1 - padY - r;
+    p.vy = -Math.abs(p.vy);
+  }
+
+  const leftGoalTop = (1 - leftGoalWidth) / 2;
+  const leftGoalBot = leftGoalTop + leftGoalWidth;
+  if (p.x - r < padX + GOAL_DEPTH_NORM) {
+    if (p.y > leftGoalTop && p.y < leftGoalBot) {
+      onGoal('guest');
+      return;
+    }
+    if (p.x - r < padX) {
+      p.x = padX + r;
+      p.vx = Math.abs(p.vx);
+    }
+  }
+
+  const rightGoalTop = (1 - rightGoalWidth) / 2;
+  const rightGoalBot = rightGoalTop + rightGoalWidth;
+  if (p.x + r > 1 - padX - GOAL_DEPTH_NORM) {
+    if (p.y > rightGoalTop && p.y < rightGoalBot) {
+      onGoal('host');
+      return;
+    }
+    if (p.x + r > 1 - padX) {
+      p.x = 1 - padX - r;
+      p.vx = -Math.abs(p.vx);
+    }
+  }
+
+  collideMalletPuck(state.malletHost, 'left');
+  collideMalletPuck(state.malletGuest, 'right');
+}
+
+function collideMalletPuck(mallet, side) {
+  const p = state.puck;
+  const pr = CONFIG.PUCK_RADIUS;
+  const malletR = side === 'left'
+    ? getMalletRadius('left')
+    : getMalletRadius('right');
+  const dx = p.x - mallet.x;
+  const dy = p.y - mallet.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const minDist = malletR + pr;
+
+  if (dist < minDist) {
+    const nx = dist > 0 ? dx / dist : side === 'left' ? 1 : -1;
+    const ny = dist > 0 ? dy / dist : 0;
+
+    p.x = mallet.x + nx * minDist;
+    p.y = mallet.y + ny * minDist;
+
+    const prevM = side === 'left' ? prevMalletHost : prevMalletGuest;
+    const mvx = mallet.x - prevM.x;
+    const mvy = mallet.y - prevM.y;
+
+    const dot = p.vx * nx + p.vy * ny;
+    p.vx = p.vx - 2 * dot * nx + mvx * CONFIG.RESTITUTION;
+    p.vy = p.vy - 2 * dot * ny + mvy * CONFIG.RESTITUTION;
+
+    const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+    if (speed > CONFIG.PUCK_MAX_SPEED) {
+      p.vx = (p.vx / speed) * CONFIG.PUCK_MAX_SPEED;
+      p.vy = (p.vy / speed) * CONFIG.PUCK_MAX_SPEED;
+    }
+  }
+
+  if (side === 'left') {
+    prevMalletHost.x = mallet.x;
+    prevMalletHost.y = mallet.y;
+  } else {
+    prevMalletGuest.x = mallet.x;
+    prevMalletGuest.y = mallet.y;
+  }
+}
+
+function onGoal(scoringSide) {
+  if (scoringSide !== 'host' && scoringSide !== 'guest') return;
+
+  state.phase = 'goal';
+  state.goalSide = scoringSide;
+  state.score[scoringSide]++;
+  updateScoreBar();
+
+  if (typeof startGoalAnimation === 'function') {
+    startGoalAnimation();
+  }
+  lastSyncTime = 0;
+  broadcastState();
+
+  setTimeout(() => {
+    if (state.score[scoringSide] >= CONFIG.WIN_SCORE) {
+      state.phase = 'result';
+      state.winner = scoringSide;
+      updateScoreBar();
+      lastSyncTime = 0;
+      broadcastState();
+      if (typeof showResult === 'function') {
+        showResult();
+      }
+    } else {
+      state.phase = 'playing';
+      state.goalSide = null;
+      resetPuck();
+      updateScoreBar();
+      if (typeof stopGoalAnimation === 'function') {
+        stopGoalAnimation();
+      }
+      lastSyncTime = 0;
+      broadcastState();
+    }
+  }, CONFIG.GOAL_ANIM_MS);
+}
 </script>
 </body>
 </html>
