@@ -905,6 +905,216 @@ function checkOrientation() {
 }
 window.matchMedia('(orientation: portrait)').addEventListener('change', checkOrientation);
 checkOrientation();
+
+// ========== CANVAS ==========
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+let canvasW = 0, canvasH = 0;
+
+function initCanvas() {
+  const wrap = document.getElementById('game-canvas-wrap');
+  const rect = wrap.getBoundingClientRect();
+  canvas.width = rect.width;
+  canvas.height = rect.height;
+  canvasW = canvas.width;
+  canvasH = canvas.height;
+}
+
+window.addEventListener('resize', () => {
+  if (state.screen === 'game') initCanvas();
+});
+
+function getCanvasCoords(nx, ny) {
+  return { x: nx * canvasW, y: ny * canvasH };
+}
+
+function getNormCoords(cx, cy) {
+  return { x: cx / canvasW, y: cy / canvasH };
+}
+
+function getGoalConfig() {
+  const h = state.handicap;
+  const leftGoalWidth = h.enabled && h.youngerSide === 'left'
+    ? CONFIG.GOAL_WIDTH_YOUNGER : CONFIG.GOAL_WIDTH_ELDER;
+  const rightGoalWidth = h.enabled && h.youngerSide === 'right'
+    ? CONFIG.GOAL_WIDTH_YOUNGER : CONFIG.GOAL_WIDTH_ELDER;
+  return { leftGoalWidth, rightGoalWidth };
+}
+
+function drawTable() {
+  const { leftGoalWidth, rightGoalWidth } = getGoalConfig();
+  const goalDepth = 50;
+  const pad = 10;
+
+  const woodGrad = ctx.createLinearGradient(0, 0, 0, canvasH);
+  woodGrad.addColorStop(0, '#cda473');
+  woodGrad.addColorStop(1, '#bb874f');
+  ctx.fillStyle = woodGrad;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, canvasW, canvasH, 20);
+  ctx.fill();
+
+  const playGrad = ctx.createLinearGradient(pad, 0, canvasW - pad, 0);
+  playGrad.addColorStop(0, '#e7f3fb');
+  playGrad.addColorStop(0.5, '#e7f3fb');
+  playGrad.addColorStop(0.5, '#ffeeeb');
+  playGrad.addColorStop(1, '#ffeeeb');
+  ctx.fillStyle = playGrad;
+  ctx.beginPath();
+  ctx.roundRect(pad, pad, canvasW - pad * 2, canvasH - pad * 2, 14);
+  ctx.fill();
+  ctx.strokeStyle = '#1a2238';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(26,34,56,0.45)';
+  ctx.lineWidth = 5;
+  ctx.setLineDash([12, 10]);
+  ctx.beginPath();
+  ctx.moveTo(canvasW / 2, pad);
+  ctx.lineTo(canvasW / 2, canvasH - pad);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(26,34,56,0.4)';
+  ctx.lineWidth = 4;
+  ctx.setLineDash([10, 8]);
+  ctx.beginPath();
+  ctx.arc(canvasW / 2, canvasH / 2, 48, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  const leftGoalH = canvasH * leftGoalWidth;
+  const leftGoalTop = (canvasH - leftGoalH) / 2;
+  ctx.fillStyle = state.goalSide === 'host'
+    ? CONFIG._goalFlashActive ? '#ffe39a' : '#bfe0f5'
+    : '#bfe0f5';
+  ctx.beginPath();
+  ctx.roundRect(0, leftGoalTop, goalDepth, leftGoalH, [0, 40, 40, 0]);
+  ctx.fill();
+  ctx.strokeStyle = '#1a2238';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(0, leftGoalTop);
+  ctx.arcTo(goalDepth, leftGoalTop, goalDepth, leftGoalTop + leftGoalH, 40);
+  ctx.arcTo(goalDepth, leftGoalTop + leftGoalH, 0, leftGoalTop + leftGoalH, 40);
+  ctx.lineTo(0, leftGoalTop + leftGoalH);
+  ctx.stroke();
+  drawNetLines(0, leftGoalTop + leftGoalH * 0.18, goalDepth * 0.62, leftGoalH * 0.64, false);
+
+  const rightGoalH = canvasH * rightGoalWidth;
+  const rightGoalTop = (canvasH - rightGoalH) / 2;
+  ctx.fillStyle = state.goalSide === 'guest'
+    ? CONFIG._goalFlashActive ? '#ffe39a' : '#ffc9c2'
+    : '#ffc9c2';
+  ctx.beginPath();
+  ctx.roundRect(canvasW - goalDepth, rightGoalTop, goalDepth, rightGoalH, [40, 0, 0, 40]);
+  ctx.fill();
+  ctx.strokeStyle = '#1a2238';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(canvasW, rightGoalTop);
+  ctx.arcTo(canvasW - goalDepth, rightGoalTop, canvasW - goalDepth, rightGoalTop + rightGoalH, 40);
+  ctx.arcTo(canvasW - goalDepth, rightGoalTop + rightGoalH, canvasW, rightGoalTop + rightGoalH, 40);
+  ctx.lineTo(canvasW, rightGoalTop + rightGoalH);
+  ctx.stroke();
+  drawNetLines(canvasW - goalDepth * 0.62, rightGoalTop + rightGoalH * 0.18, goalDepth * 0.62, rightGoalH * 0.64, false);
+}
+
+function drawNetLines(x, y, w, h, _unused) {
+  ctx.save();
+  ctx.globalAlpha = 0.45;
+  ctx.strokeStyle = '#1a2238';
+  ctx.lineWidth = 2;
+  const spacing = 11;
+  for (let ly = y; ly < y + h; ly += spacing) {
+    ctx.beginPath();
+    ctx.moveTo(x, ly);
+    ctx.lineTo(x + w, ly);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function getMalletRadius(side) {
+  const h = state.handicap;
+  if (!h.enabled) return CONFIG.MALLET_RADIUS_ELDER;
+  const isYoungerSide = (side === 'left' && h.youngerSide === 'left') ||
+                        (side === 'right' && h.youngerSide === 'right');
+  return isYoungerSide ? CONFIG.MALLET_RADIUS_YOUNGER : CONFIG.MALLET_RADIUS_ELDER;
+}
+
+function drawMallet(nx, ny, color, lightColor, side) {
+  const { x, y } = getCanvasCoords(nx, ny);
+  const r = getMalletRadius(side) * canvasW;
+  const innerR = r * 0.52;
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(26,34,56,0.5)';
+  ctx.shadowOffsetY = 5;
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = color;
+  ctx.strokeStyle = '#1a2238';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.restore();
+
+  ctx.fillStyle = lightColor;
+  ctx.strokeStyle = '#1a2238';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(x, y, innerR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+}
+
+function drawPuck(nx, ny) {
+  const { x, y } = getCanvasCoords(nx, ny);
+  const r = CONFIG.PUCK_RADIUS * canvasW;
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(26,34,56,0.35)';
+  ctx.shadowOffsetY = 4;
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = '#1a2238';
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+
+  ctx.fillStyle = '#ffc233';
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.39, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function render() {
+  if (state.screen !== 'game') return;
+
+  ctx.clearRect(0, 0, canvasW, canvasH);
+  drawTable();
+
+  const hostPos = state.malletHost;
+  const guestPos = state.malletGuest;
+
+  drawMallet(hostPos.x, hostPos.y, '#4ea8de', '#bfe0f5', 'left');
+  drawMallet(guestPos.x, guestPos.y, '#ff6b5e', '#ffd4cd', 'right');
+
+  const px = state.role === 'guest' ? state.puck.x : state.puck.x;
+  const py = state.role === 'guest' ? state.puck.y : state.puck.y;
+  drawPuck(px, py);
+}
 </script>
 </body>
 </html>
