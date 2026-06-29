@@ -1,0 +1,13 @@
+# 依存関係
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# エディタ
+.vscode/
+*.swp
+
+# SDD作業ファイル（実装計画・進捗はdocs/に残す）
+.superpowers/
