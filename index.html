@@ -259,6 +259,28 @@ html, body {
   color: var(--c-ink);
   opacity: 0.6;
 }
+.qr-label {
+  font: 800 12px 'M PLUS Rounded 1c';
+  color: var(--c-ink);
+  opacity: 0.55;
+  letter-spacing: 1px;
+  margin-top: 10px;
+}
+#qrcode-wrap {
+  margin-top: 6px;
+  border: 3px solid var(--c-ink);
+  border-radius: 10px;
+  box-shadow: 0 3px 0 var(--c-ink);
+  overflow: hidden;
+  width: 96px;
+  height: 96px;
+  flex: none;
+}
+#qrcode-wrap canvas, #qrcode-wrap img {
+  display: block;
+  width: 96px !important;
+  height: 96px !important;
+}
 
 /* 2c guest input */
 .connect-guest-inner {
@@ -703,6 +725,8 @@ html, body {
             <div class="code-tile" id="code-d2">-</div>
             <div class="code-tile" id="code-d3">-</div>
           </div>
+          <div class="qr-label">よみとってね</div>
+          <div id="qrcode-wrap"></div>
         </div>
         <div class="connect-spinner-panel">
           <div class="spinner-wrap">
@@ -818,6 +842,7 @@ html, body {
 </div>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
 // ========== CONFIG: TUNING CONSTANTS ==========
 const CONFIG = {
@@ -1268,6 +1293,18 @@ function displayRoomCode(code) {
   ['d0','d1','d2','d3'].forEach((id, i) => {
     document.getElementById('code-' + id).textContent = code[i] || '-';
   });
+  const wrap = document.getElementById('qrcode-wrap');
+  wrap.innerHTML = '';
+  if (code && typeof QRCode !== 'undefined') {
+    new QRCode(wrap, {
+      text: window.location.href,
+      width: 96,
+      height: 96,
+      colorDark: '#1a2238',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+  }
 }
 
 function init() {
