@@ -1854,6 +1854,83 @@ function createConfettiPiece(i) {
 
   return div;
 }
+
+// ========== RESULT SCREEN ==========
+function showResult() {
+  stopGameLoop();
+  if (typeof stopGoalAnimation === 'function') {
+    stopGoalAnimation();
+  }
+
+  updateResultScreen();
+
+  const confettiLayer = document.getElementById('result-confetti');
+  stopConfetti(confettiLayer);
+  startConfetti(confettiLayer, 30);
+
+  showScreen('result');
+}
+
+document.getElementById('btn-replay').addEventListener('click', () => {
+  stopConfetti(document.getElementById('result-confetti'));
+  state.isPaused = false;
+  showScreen('game');
+
+  if (state.role === 'host') {
+    startGame();
+    startGameLoop();
+    lastSyncTime = 0;
+    broadcastState();
+  } else {
+    startGameLoop();
+  }
+});
+
+function updateResultScreen() {
+  const isHostWinner = state.winner === 'host';
+  const winnerColor = isHostWinner ? '#4ea8de' : '#ff6b5e';
+  const winnerCheek = isHostWinner ? '#ff9d90' : '#ffce6b';
+  const winnerBg = isHostWinner ? 'var(--c-goal-blue)' : 'var(--c-goal-red)';
+
+  document.getElementById('screen-result').style.background = winnerBg;
+
+  const winnerChar = document.getElementById('result-winner-char');
+  winnerChar.innerHTML = `
+    <div style="position:relative;width:72px;height:72px;transform:scale(1.78);">
+      ${buildChar(winnerColor, winnerCheek, 72)}
+    </div>
+  `;
+
+  const kachiEl = document.getElementById('result-kachi');
+  kachiEl.textContent = '\u304b\u3061\uff01';
+  kachiEl.style.color = winnerColor;
+  kachiEl.classList.toggle('blue', isHostWinner);
+
+  const leftCard = document.getElementById('result-card-left');
+  const rightCard = document.getElementById('result-card-right');
+  const numLeft = document.getElementById('result-num-left');
+  const numRight = document.getElementById('result-num-right');
+  const charLeft = document.getElementById('result-char-left');
+  const charRight = document.getElementById('result-char-right');
+
+  charLeft.innerHTML = buildChar('#4ea8de', '#ff9d90', 52);
+  charRight.innerHTML = buildChar('#ff6b5e', '#ffce6b', 48);
+  numLeft.textContent = state.score.host;
+  numRight.textContent = state.score.guest;
+  numLeft.style.color = '#4ea8de';
+  numRight.style.color = '#ff6b5e';
+
+  leftCard.classList.toggle('winner', isHostWinner);
+  rightCard.classList.toggle('winner', !isHostWinner);
+  numLeft.classList.toggle('loser', !isHostWinner);
+  numRight.classList.toggle('loser', isHostWinner);
+
+  const loserTeam = isHostWinner
+    ? '\u3042\u304b\u30c1\u30fc\u30e0'
+    : '\u3042\u304a\u30c1\u30fc\u30e0';
+  document.getElementById('result-msg').textContent =
+    `\u3064\u304e\u306f ${loserTeam} \u304c\u3093\u3070\u308d\u3046\uff01`;
+}
 </script>
 </body>
 </html>
