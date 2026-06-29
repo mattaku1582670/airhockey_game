@@ -1759,6 +1759,101 @@ function stopGameLoop() {
 document.getElementById('btn-pause').addEventListener('click', () => {
   state.isPaused = !state.isPaused;
 });
+
+// ========== GOAL ANIMATION ==========
+CONFIG._goalFlashActive = false;
+let confettiPieces = [];
+
+function startGoalAnimation() {
+  CONFIG._goalFlashActive = true;
+  const overlay = document.getElementById('goal-overlay');
+  overlay.classList.add('active');
+
+  const ring = document.getElementById('ping-ring');
+  const badge = document.getElementById('plus-one');
+  if (state.goalSide === 'guest') {
+    ring.style.right = '5%';
+    ring.style.left = '';
+    ring.style.top = '50%';
+    ring.style.transform = 'translate(50%, -50%)';
+    badge.style.right = '18%';
+    badge.style.left = '';
+    badge.style.top = '24%';
+  } else {
+    ring.style.left = '5%';
+    ring.style.right = '';
+    ring.style.top = '50%';
+    ring.style.transform = 'translate(-50%, -50%)';
+    badge.style.left = '18%';
+    badge.style.right = '';
+    badge.style.top = '24%';
+  }
+
+  startConfetti(document.getElementById('confetti-layer'), 18);
+
+  const scoringChar = state.goalSide === 'host'
+    ? document.getElementById('char-blue')
+    : document.getElementById('char-red');
+  scoringChar.style.animation = 'hop 1s ease-in-out infinite';
+
+  updateScoreBar();
+}
+
+function stopGoalAnimation() {
+  CONFIG._goalFlashActive = false;
+  document.getElementById('goal-overlay').classList.remove('active');
+  stopConfetti(document.getElementById('confetti-layer'));
+
+  document.getElementById('char-blue').style.animation = '';
+  document.getElementById('char-red').style.animation = '';
+
+  updateScoreBar();
+}
+
+function startConfetti(container, n) {
+  container.innerHTML = '';
+  container.classList.add('active');
+  confettiPieces = [];
+
+  for (let i = 0; i < n; i++) {
+    const piece = createConfettiPiece(i);
+    confettiPieces.push(piece);
+    container.appendChild(piece);
+  }
+}
+
+function stopConfetti(container) {
+  container.classList.remove('active');
+  container.innerHTML = '';
+  confettiPieces = [];
+}
+
+function createConfettiPiece(i) {
+  const colors = ['#ff6b5e', '#3fc7a3', '#4ea8de', '#ffc233'];
+  const div = document.createElement('div');
+  const left = (i * 89) % 100;
+  const size = 11 + ((i * 7) % 9);
+  const delay = ((i * 0.41) % 3.2).toFixed(2);
+  const dur = (2.4 + ((i * 0.33) % 2.0)).toFixed(2);
+  const color = colors[i % colors.length];
+  const radius = (i % 3 === 0) ? '50%' : '3px';
+  const rot = (i * 37) % 360;
+
+  div.style.cssText = [
+    'position:absolute',
+    `left:${left}%`,
+    'top:-24px',
+    `width:${size}px`,
+    `height:${Math.round(size * 0.72)}px`,
+    `background:${color}`,
+    'border:2px solid #1a2238',
+    `border-radius:${radius}`,
+    `transform:rotate(${rot}deg)`,
+    `animation:fall ${dur}s ${delay}s linear infinite`,
+  ].join(';');
+
+  return div;
+}
 </script>
 </body>
 </html>
