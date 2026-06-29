@@ -1114,6 +1114,121 @@ function render() {
   // Task 8でゲスト側にlerp補間を適用する
   drawPuck(state.puck.x, state.puck.y);
 }
+
+// ========== CHARACTER DOM BUILDER ==========
+function buildChar(color, cheekColor, size = 58) {
+  const s = size;
+  return `
+    <div style="position:absolute;inset:0;background:${color};border:${Math.round(s*0.069)}px solid #1a2238;border-radius:50%;box-shadow:0 ${Math.round(s*0.086)}px 0 #1a2238;"></div>
+    <div style="position:absolute;top:${Math.round(s*0.362)}px;left:${Math.round(s*0.241)}px;width:${Math.round(s*0.138)}px;height:${Math.round(s*0.19)}px;background:#1a2238;border-radius:50%;"></div>
+    <div style="position:absolute;top:${Math.round(s*0.362)}px;right:${Math.round(s*0.241)}px;width:${Math.round(s*0.138)}px;height:${Math.round(s*0.19)}px;background:#1a2238;border-radius:50%;"></div>
+    <div style="position:absolute;top:${Math.round(s*0.534)}px;left:${Math.round(s*0.12)}px;width:${Math.round(s*0.172)}px;height:${Math.round(s*0.103)}px;background:${cheekColor};border-radius:50%;"></div>
+    <div style="position:absolute;top:${Math.round(s*0.534)}px;right:${Math.round(s*0.12)}px;width:${Math.round(s*0.172)}px;height:${Math.round(s*0.103)}px;background:${cheekColor};border-radius:50%;"></div>
+    <div style="position:absolute;top:${Math.round(s*0.534)}px;left:50%;transform:translateX(-50%);width:${Math.round(s*0.31)}px;height:${Math.round(s*0.155)}px;border:3px solid #1a2238;border-top:none;border-radius:0 0 ${Math.round(s*0.31)}px ${Math.round(s*0.31)}px;"></div>
+  `;
+}
+
+function initCharElements() {
+  // 繧ｹ繧ｳ繧｢繝舌・縺ｮ繧ｭ繝｣繝ｩ
+  document.getElementById('char-blue').innerHTML = buildChar('#4ea8de', '#ff9d90', 52);
+  document.getElementById('char-red').innerHTML = buildChar('#ff6b5e', '#ffce6b', 52);
+  // 謗･邯壽・蜉溽判髱｢縺ｮ繧ｭ繝｣繝ｩ
+  document.getElementById('char-blue-hop').innerHTML = buildChar('#4ea8de', '#ff9d90', 56);
+  document.getElementById('char-red-hop').innerHTML = buildChar('#ff6b5e', '#ffce6b', 56);
+  // 繧ｹ繝斐リ繝ｼ荳ｭ縺ｮ繧ｭ繝｣繝ｩ
+  document.querySelector('.spinner-char').innerHTML = buildChar('#4ea8de', '#ff9d90', 60);
+}
+
+function buildKeypad() {
+  const keypad = document.getElementById('keypad');
+  keypad.innerHTML = '';
+  const keys = ['1','2','3','4','5','6','7','8','9','del','0','ok'];
+  keys.forEach(k => {
+    const div = document.createElement('div');
+    div.className = 'key';
+    if (k === 'del') {
+      div.className += ' key-del';
+      div.innerHTML = `<div style="position:relative;width:24px;height:24px;">
+        <div style="position:absolute;top:9px;left:1px;width:22px;height:6px;border-radius:3px;background:#1a2238;transform:rotate(45deg);"></div>
+        <div style="position:absolute;top:9px;left:1px;width:22px;height:6px;border-radius:3px;background:#1a2238;transform:rotate(-45deg);"></div>
+      </div>`;
+      div.addEventListener('click', onKeyDel);
+    } else if (k === 'ok') {
+      div.className += ' key-ok';
+      div.innerHTML = `<div style="position:relative;width:30px;height:30px;">
+        <div style="position:absolute;left:2px;top:15px;width:12px;height:6px;background:#1a2238;border-radius:3px;transform:rotate(45deg);transform-origin:left;"></div>
+        <div style="position:absolute;left:10px;top:20px;width:23px;height:6px;background:#1a2238;border-radius:3px;transform:rotate(-52deg);transform-origin:left;"></div>
+      </div>`;
+      div.addEventListener('click', onKeyOk);
+    } else {
+      div.textContent = k;
+      div.dataset.digit = k;
+      div.addEventListener('click', () => onKeyDigit(k));
+    }
+    keypad.appendChild(div);
+  });
+}
+
+function updateInputSlots() {
+  const slots = document.getElementById('input-slots');
+  slots.innerHTML = '';
+  for (let i = 0; i < 4; i++) {
+    const div = document.createElement('div');
+    div.className = 'input-slot';
+    if (i < state.inputDigits.length) {
+      div.textContent = state.inputDigits[i];
+    } else {
+      div.classList.add('input-slot-empty');
+    }
+    slots.appendChild(div);
+  }
+}
+
+function onKeyDigit(d) {
+  if (state.inputDigits.length >= 4) return;
+  state.inputDigits.push(d);
+  updateInputSlots();
+}
+
+function onKeyDel() {
+  state.inputDigits.pop();
+  updateInputSlots();
+}
+
+function onKeyOk() {
+  if (state.inputDigits.length < 4) return;
+  const code = state.inputDigits.join('');
+  connectAsGuest(code);
+}
+
+function updateScoreBar() {
+  const blueEl = document.getElementById('score-blue');
+  const redEl = document.getElementById('score-red');
+
+  // host縺ｯ蟾ｦ・磯搨・峨“uest縺ｯ蜿ｳ・郁ｵ､・・
+  blueEl.textContent = state.score.host;
+  redEl.textContent = state.score.guest;
+
+  blueEl.classList.toggle('scoring', state.goalSide === 'host' && state.phase === 'goal');
+  redEl.classList.toggle('scoring', state.goalSide === 'guest' && state.phase === 'goal');
+  blueEl.classList.toggle('dimmed', state.goalSide === 'guest' && state.phase === 'goal');
+  redEl.classList.toggle('dimmed', state.goalSide === 'host' && state.phase === 'goal');
+}
+
+function displayRoomCode(code) {
+  state.roomCode = code;
+  ['d0','d1','d2','d3'].forEach((id, i) => {
+    document.getElementById('code-' + id).textContent = code[i] || '-';
+  });
+}
+
+function init() {
+  initCharElements();
+  buildKeypad();
+  updateInputSlots();
+  checkOrientation();
+}
+document.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
