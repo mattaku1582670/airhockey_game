@@ -804,7 +804,107 @@ html, body {
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
-// PLACEHOLDER: ゲームロジック（Task 2〜10 で追記）
+// ========== CONFIG: TUNING CONSTANTS ==========
+const CONFIG = {
+  WIN_SCORE: 5,
+
+  // Puck
+  PUCK_RADIUS: 0.038,
+  PUCK_INIT_SPEED: 0.004,
+  PUCK_MAX_SPEED: 0.018,
+  PUCK_MIN_SPEED: 0.002,
+  PUCK_FRICTION: 0.9995,
+
+  // Mallets
+  MALLET_RADIUS_ELDER: 0.055,
+  MALLET_RADIUS_YOUNGER: 0.070,
+
+  // Goal widths
+  GOAL_WIDTH_ELDER: 0.45,
+  GOAL_WIDTH_YOUNGER: 0.55,
+
+  // Physics
+  RESTITUTION: 1.2,
+
+  // Network
+  SYNC_HZ: 30,
+  LERP_ALPHA: 0.25,
+
+  // Animation
+  GOAL_ANIM_MS: 1800,
+  CONNECTED_SHOW_MS: 1500,
+
+  // Handicap
+  HANDICAP_ENABLED: false,
+  YOUNGER_SIDE: 'left',
+};
+
+// ========== STATE ==========
+const state = {
+  // Screen
+  screen: 'connect',
+  connectStep: 'choose',
+
+  // Role
+  role: null,
+  roomCode: '',
+
+  // Guest input
+  inputDigits: [],
+
+  // Game
+  phase: 'waiting',
+  score: { host: 0, guest: 0 },
+  winner: null,
+
+  // Game objects in normalized coordinates
+  puck: { x: 0.5, y: 0.5, vx: 0, vy: 0 },
+  malletHost: { x: 0.2, y: 0.5 },
+  malletGuest: { x: 0.8, y: 0.5 },
+
+  // Guest interpolation target
+  puckTarget: { x: 0.5, y: 0.5 },
+
+  // Animation flags
+  goalSide: null,
+  isPaused: false,
+
+  // Handicap settings
+  handicap: {
+    enabled: false,
+    youngerSide: 'left',
+  },
+};
+
+// ========== SCREEN MANAGEMENT ==========
+function showScreen(name) {
+  state.screen = name;
+  document.getElementById('screen-connect').classList.toggle('active', name === 'connect');
+  document.getElementById('screen-game').classList.toggle('active', name === 'game');
+  document.getElementById('screen-result').classList.toggle('active', name === 'result');
+}
+
+function showConnectStep(step) {
+  state.connectStep = step;
+  const steps = ['choose', 'hostWait', 'guestInput', 'connected'];
+  const ids = {
+    choose: 'step-choose',
+    hostWait: 'step-host-wait',
+    guestInput: 'step-guest-input',
+    connected: 'step-connected',
+  };
+  steps.forEach(s => {
+    document.getElementById(ids[s]).classList.toggle('active', s === step);
+  });
+}
+
+// ========== ORIENTATION CHECK ==========
+function checkOrientation() {
+  const isPortrait = window.matchMedia('(orientation: portrait)').matches;
+  document.getElementById('screen-orient').classList.toggle('active', isPortrait);
+}
+window.matchMedia('(orientation: portrait)').addEventListener('change', checkOrientation);
+checkOrientation();
 </script>
 </body>
 </html>
