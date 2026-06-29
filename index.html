@@ -1254,6 +1254,7 @@ function onConnectionEstablished() {
   setTimeout(() => {
     showScreen('game');
     initCanvas();
+    initTouchHandlers();
     if (state.role === 'host' && typeof startGame === 'function') {
       startGame();
     }
@@ -1623,6 +1624,92 @@ function onGoal(scoringSide) {
       broadcastState();
     }
   }, CONFIG.GOAL_ANIM_MS);
+}
+
+// ========== TOUCH HANDLING ==========
+let activeTouchId = null;
+let touchHandlersInitialized = false;
+
+function clampMallet(m, side) {
+  const padX = 10 / canvasW;
+  const padY = 10 / canvasH;
+  const mr = side === 'left' ? getMalletRadius('left') : getMalletRadius('right');
+
+  const minX = side === 'left' ? padX + mr : 0.5 + mr;
+  const maxX = side === 'left' ? 0.5 - mr : 1 - padX - mr;
+
+  return {
+    x: Math.max(minX, Math.min(maxX, m.x)),
+    y: Math.max(padY + mr, Math.min(1 - padY - mr, m.y)),
+  };
+}
+
+function initTouchHandlers() {
+  if (touchHandlersInitialized) return;
+  canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+  canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+  canvas.addEventListener('touchend', onTouchEnd, { passive: false });
+  canvas.addEventListener('touchcancel', onTouchEnd, { passive: false });
+  touchHandlersInitialized = true;
+}
+
+function onTouchStart(e) {
+  e.preventDefault();
+  if (activeTouchId !== null) return;
+
+  const touch = e.changedTouches[0];
+  activeTouchId = touch.identifier;
+  moveMalletFromTouch(touch);
+}
+
+function onTouchMove(e) {
+  e.preventDefault();
+  for (const touch of e.changedTouches) {
+    if (touch.identifier === activeTouchId) {
+      moveMalletFromTouch(touch);
+      break;
+    }
+  }
+}
+
+function onTouchEnd(e) {
+  for (const touch of e.changedTouches) {
+    if (touch.identifier === activeTouchId) {
+      activeTouchId = null;
+      break;
+    }
+  }
+}
+
+function moveMalletFromTouch(touch) {
+  if (!canvasW || !canvasH || state.screen !== 'game') return;
+
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const cx = (touch.clientX - rect.left) * scaleX;
+  const cy = (touch.clientY - rect.top) * scaleY;
+  const pos = getNormCoords(cx, cy);
+  const side = state.role === 'host' ? 'left' : 'right';
+  const clamped = clampMallet(pos, side);
+
+  if (state.role === 'host') {
+    state.malletHost.x = clamped.x;
+    state.malletHost.y = clamped.y;
+  } else if (state.role === 'guest') {
+    state.malletGuest.x = clamped.x;
+    state.malletGuest.y = clamped.y;
+    sendMalletToGuest();
+  }
+}
+
+function sendMalletToGuest() {
+  if (state.role !== 'guest') return;
+  sendToHost({
+    t: 'mallet',
+    x: state.malletGuest.x,
+    y: state.malletGuest.y,
+  });
 }
 </script>
 </body>
