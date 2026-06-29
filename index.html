@@ -1466,6 +1466,8 @@ function startGame() {
   prevMalletGuest = { x: state.malletGuest.x, y: state.malletGuest.y };
   resetPuck();
   updateScoreBar();
+  initCanvas();
+  render();
 }
 
 function resetPuck() {
@@ -1474,6 +1476,8 @@ function resetPuck() {
   const angle = (Math.random() * 0.52 - 0.26) + (Math.random() > 0.5 ? 0 : Math.PI);
   state.puck.vx = Math.cos(angle) * CONFIG.PUCK_INIT_SPEED;
   state.puck.vy = Math.sin(angle) * CONFIG.PUCK_INIT_SPEED;
+  prevMalletHost = { x: state.malletHost.x, y: state.malletHost.y };
+  prevMalletGuest = { x: state.malletGuest.x, y: state.malletGuest.y };
 }
 
 function updatePhysics() {
