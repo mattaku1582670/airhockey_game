@@ -1111,7 +1111,11 @@ function render() {
   drawMallet(hostPos.x, hostPos.y, '#4ea8de', '#bfe0f5', 'left');
   drawMallet(guestPos.x, guestPos.y, '#ff6b5e', '#ffd4cd', 'right');
 
-  // Task 8でゲスト側にlerp補間を適用する
+  if (state.role === 'guest' && !puckInterpolatedThisFrame) {
+    state.puck.x = lerp(state.puck.x, state.puckTarget.x, CONFIG.LERP_ALPHA);
+    state.puck.y = lerp(state.puck.y, state.puckTarget.y, CONFIG.LERP_ALPHA);
+  }
+  puckInterpolatedThisFrame = false;
   drawPuck(state.puck.x, state.puck.y);
 }
 
@@ -1711,6 +1715,50 @@ function sendMalletToGuest() {
     y: state.malletGuest.y,
   });
 }
+
+// ========== GAME LOOP ==========
+let animFrameId = null;
+let puckInterpolatedThisFrame = false;
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function startGameLoop() {
+  if (animFrameId) cancelAnimationFrame(animFrameId);
+
+  function loop() {
+    animFrameId = requestAnimationFrame(loop);
+    puckInterpolatedThisFrame = false;
+
+    if (state.screen !== 'game') return;
+    if (state.isPaused) return;
+
+    if (state.role === 'host') {
+      updatePhysics();
+      broadcastState();
+    } else {
+      state.puck.x = lerp(state.puck.x, state.puckTarget.x, CONFIG.LERP_ALPHA);
+      state.puck.y = lerp(state.puck.y, state.puckTarget.y, CONFIG.LERP_ALPHA);
+      puckInterpolatedThisFrame = true;
+    }
+
+    render();
+  }
+
+  loop();
+}
+
+function stopGameLoop() {
+  if (animFrameId) {
+    cancelAnimationFrame(animFrameId);
+    animFrameId = null;
+  }
+}
+
+document.getElementById('btn-pause').addEventListener('click', () => {
+  state.isPaused = !state.isPaused;
+});
 </script>
 </body>
 </html>
