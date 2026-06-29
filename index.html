@@ -1111,9 +1111,8 @@ function render() {
   drawMallet(hostPos.x, hostPos.y, '#4ea8de', '#bfe0f5', 'left');
   drawMallet(guestPos.x, guestPos.y, '#ff6b5e', '#ffd4cd', 'right');
 
-  const px = state.role === 'guest' ? state.puck.x : state.puck.x;
-  const py = state.role === 'guest' ? state.puck.y : state.puck.y;
-  drawPuck(px, py);
+  // Task 8でゲスト側にlerp補間を適用する
+  drawPuck(state.puck.x, state.puck.y);
 }
 </script>
 </body>
