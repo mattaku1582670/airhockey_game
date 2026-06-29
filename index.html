@@ -964,6 +964,25 @@ function getGoalConfig() {
   return { leftGoalWidth, rightGoalWidth };
 }
 
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    const radii = Array.isArray(r) ? r : [r, r, r, r];
+    const [tl, tr, br, bl] = radii.map(v => Math.min(v || 0, w / 2, h / 2));
+    this.beginPath();
+    this.moveTo(x + tl, y);
+    this.lineTo(x + w - tr, y);
+    this.arcTo(x + w, y, x + w, y + tr, tr);
+    this.lineTo(x + w, y + h - br);
+    this.arcTo(x + w, y + h, x + w - br, y + h, br);
+    this.lineTo(x + bl, y + h);
+    this.arcTo(x, y + h, x, y + h - bl, bl);
+    this.lineTo(x, y + tl);
+    this.arcTo(x, y, x + tl, y, tl);
+    this.closePath();
+    return this;
+  };
+}
+
 function drawTable() {
   const { leftGoalWidth, rightGoalWidth } = getGoalConfig();
   const goalDepth = 50;
@@ -1380,7 +1399,7 @@ function connectAsGuest(code) {
 
   peer.on('open', () => {
     conn = peer.connect(peerId, {
-      reliable: false,
+      reliable: true,
       serialization: 'json',
     });
 
@@ -1487,6 +1506,7 @@ function resumeGameFromRemoteState() {
 }
 
 function disconnect() {
+  stopGameLoop();
   hideDisconnect();
   if (conn) {
     try { conn.close(); } catch (e) {}
