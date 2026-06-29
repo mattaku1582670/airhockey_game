@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <title>エアホッケー</title>
@@ -15,11 +15,14 @@
 html, body {
   margin: 0; padding: 0;
   width: 100%; height: 100%;
+  min-height: -webkit-fill-available;
   overflow: hidden;
   font-family: 'M PLUS Rounded 1c', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
   background: #1a2238;
   touch-action: none;
+  overscroll-behavior: none;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
@@ -95,9 +98,21 @@ html, body {
   padding: 40px;
 }
 #screen-orient .rotate-icon {
-  font-size: 64px;
+  width: 60px;
+  height: 90px;
+  border: 6px solid #fff;
+  border-radius: 10px;
   animation: spin 2s linear infinite;
-  display: inline-block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#screen-orient .rotate-icon::before {
+  content: '';
+  width: 20px;
+  height: 6px;
+  border-radius: 3px;
+  background: #fff;
 }
 
 /* === CONNECT SCREEN === */
@@ -629,7 +644,7 @@ html, body {
 
 <!-- 縦持ちオーバーレイ -->
 <div id="screen-orient" class="screen">
-  <span class="rotate-icon">📱</span>
+  <div class="rotate-icon" aria-hidden="true"></div>
   <div>iPadを よこにしてね</div>
 </div>
 
@@ -900,10 +915,17 @@ function showConnectStep(step) {
 
 // ========== ORIENTATION CHECK ==========
 function checkOrientation() {
-  const isPortrait = window.matchMedia('(orientation: portrait)').matches;
+  const isPortrait = window.matchMedia('(orientation: portrait)').matches ||
+    window.innerHeight > window.innerWidth;
   document.getElementById('screen-orient').classList.toggle('active', isPortrait);
 }
-window.matchMedia('(orientation: portrait)').addEventListener('change', checkOrientation);
+const orientationQuery = window.matchMedia('(orientation: portrait)');
+if (typeof orientationQuery.addEventListener === 'function') {
+  orientationQuery.addEventListener('change', checkOrientation);
+} else if (typeof orientationQuery.addListener === 'function') {
+  orientationQuery.addListener(checkOrientation);
+}
+window.addEventListener('orientationchange', checkOrientation);
 checkOrientation();
 
 // ========== CANVAS ==========
@@ -921,6 +943,7 @@ function initCanvas() {
 }
 
 window.addEventListener('resize', () => {
+  checkOrientation();
   if (state.screen === 'game') initCanvas();
 });
 
@@ -990,9 +1013,10 @@ function drawTable() {
 
   const leftGoalH = canvasH * leftGoalWidth;
   const leftGoalTop = (canvasH - leftGoalH) / 2;
-  ctx.fillStyle = state.goalSide === 'host'
-    ? CONFIG._goalFlashActive ? '#ffe39a' : '#bfe0f5'
-    : '#bfe0f5';
+  const leftFlashing = state.phase === 'goal' &&
+    state.goalSide === 'host' &&
+    CONFIG._goalFlashActive;
+  ctx.fillStyle = leftFlashing ? '#ffe39a' : '#bfe0f5';
   ctx.beginPath();
   ctx.roundRect(0, leftGoalTop, goalDepth, leftGoalH, [0, 40, 40, 0]);
   ctx.fill();
@@ -1008,9 +1032,10 @@ function drawTable() {
 
   const rightGoalH = canvasH * rightGoalWidth;
   const rightGoalTop = (canvasH - rightGoalH) / 2;
-  ctx.fillStyle = state.goalSide === 'guest'
-    ? CONFIG._goalFlashActive ? '#ffe39a' : '#ffc9c2'
-    : '#ffc9c2';
+  const rightFlashing = state.phase === 'goal' &&
+    state.goalSide === 'guest' &&
+    CONFIG._goalFlashActive;
+  ctx.fillStyle = rightFlashing ? '#ffe39a' : '#ffc9c2';
   ctx.beginPath();
   ctx.roundRect(canvasW - goalDepth, rightGoalTop, goalDepth, rightGoalH, [40, 0, 0, 40]);
   ctx.fill();
@@ -1278,6 +1303,22 @@ function hideDisconnect() {
   document.getElementById('disconnect-msg').classList.remove('active');
 }
 
+function showPeerError(err) {
+  console.error('PeerJS error:', err);
+  const type = err && err.type;
+  const message = type === 'network'
+    ? 'ネットワークエラーが発生しました。もう一度つなぎなおしてください。'
+    : '通信エラーが発生しました。もう一度つなぎなおしてください。';
+  alert(message);
+  if (state.screen === 'game') showDisconnect();
+}
+
+function resetGuestInputAfterError() {
+  state.inputDigits = [];
+  updateInputSlots();
+  showConnectStep('guestInput');
+}
+
 function startHost() {
   if (peer) {
     try { peer.destroy(); } catch (e) {}
@@ -1310,12 +1351,12 @@ function startHost() {
   });
 
   peer.on('error', (err) => {
-    if (err.type === 'unavailable-id') {
+    if (err && err.type === 'unavailable-id') {
       try { peer.destroy(); } catch (e) {}
       peer = null;
       setTimeout(startHost, 200);
     } else {
-      console.error('PeerJS error:', err);
+      showPeerError(err);
     }
   });
 
@@ -1350,13 +1391,11 @@ function connectAsGuest(code) {
   });
 
   peer.on('error', (err) => {
-    if (err.type === 'peer-unavailable') {
-      alert('あいことばが ちがうかも...もういちど たしかめてね');
-      state.inputDigits = [];
-      updateInputSlots();
-      showConnectStep('guestInput');
+    if (err && err.type === 'peer-unavailable') {
+      alert('合言葉が ちがうかも...もういちど たしかめてね');
+      resetGuestInputAfterError();
     } else {
-      console.error('PeerJS error:', err);
+      showPeerError(err);
     }
   });
 
@@ -1386,6 +1425,8 @@ function handleGuestMessage(data) {
   if (!data || typeof data !== 'object') return;
   if (data.t === 'mallet') {
     onGuestMalletUpdate(data.x, data.y);
+  } else if (data.t === 'replay' && state.phase === 'result') {
+    restartMatch();
   }
 }
 
@@ -1423,10 +1464,26 @@ function onStateReceived(data) {
       if (typeof showResult === 'function') {
         showResult();
       }
+    } else if (data.phase === 'playing') {
+      state.goalSide = null;
+      state.winner = null;
+      resumeGameFromRemoteState();
     }
   }
 
   updateScoreBar();
+}
+
+function resumeGameFromRemoteState() {
+  state.isPaused = false;
+  if (typeof stopGoalAnimation === 'function') {
+    stopGoalAnimation();
+  }
+  stopConfetti(document.getElementById('result-confetti'));
+  showScreen('game');
+  initCanvas();
+  initTouchHandlers();
+  startGameLoop();
 }
 
 function disconnect() {
@@ -1877,9 +1934,15 @@ function showResult() {
 }
 
 document.getElementById('btn-replay').addEventListener('click', () => {
+  restartMatch();
+});
+
+function restartMatch() {
   stopConfetti(document.getElementById('result-confetti'));
   state.isPaused = false;
   showScreen('game');
+  initCanvas();
+  initTouchHandlers();
 
   if (state.role === 'host') {
     startGame();
@@ -1887,9 +1950,10 @@ document.getElementById('btn-replay').addEventListener('click', () => {
     lastSyncTime = 0;
     broadcastState();
   } else {
+    sendToHost({ t: 'replay' });
     startGameLoop();
   }
-});
+}
 
 function updateResultScreen() {
   const isHostWinner = state.winner === 'host';
