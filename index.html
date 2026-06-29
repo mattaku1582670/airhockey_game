@@ -1393,6 +1393,8 @@ function handleHostMessage(data) {
   if (!data || typeof data !== 'object') return;
   if (data.t === 'state') {
     onStateReceived(data);
+  } else if (isHandicapMessage(data)) {
+    handleHandicapMessage(data);
   }
 }
 
@@ -1472,6 +1474,9 @@ function startGame() {
   resetPuck();
   updateScoreBar();
   initCanvas();
+  if (state.role === 'host') {
+    applyHandicap();
+  }
   render();
 }
 
@@ -1931,6 +1936,133 @@ function updateResultScreen() {
   document.getElementById('result-msg').textContent =
     `\u3064\u304e\u306f ${loserTeam} \u304c\u3093\u3070\u308d\u3046\uff01`;
 }
+
+// ========== HANDICAP SYSTEM ==========
+function ensureHandicapUi() {
+  const hostWait = document.getElementById('step-host-wait');
+  if (!hostWait || document.getElementById('handicap-ui')) return;
+
+  const ui = document.createElement('div');
+  ui.id = 'handicap-ui';
+  ui.style.cssText = [
+    'padding:0 20px 16px',
+    'display:flex',
+    'align-items:center',
+    'gap:12px',
+    'justify-content:center',
+    'flex-wrap:wrap',
+  ].join(';');
+
+  const label = document.createElement('label');
+  label.style.cssText = [
+    "font:800 14px 'M PLUS Rounded 1c'",
+    'color:#1a2238',
+    'opacity:0.72',
+    'display:flex',
+    'align-items:center',
+    'gap:8px',
+    'cursor:pointer',
+  ].join(';');
+
+  const toggle = document.createElement('input');
+  toggle.type = 'checkbox';
+  toggle.id = 'handicap-toggle';
+  toggle.checked = state.handicap.enabled;
+  toggle.style.cssText = 'width:20px;height:20px';
+
+  const labelText = document.createElement('span');
+  labelText.textContent = '\u30cf\u30f3\u30c7\u3042\u308a\uff08\u5e74\u4e0b\uff09';
+
+  const sideSelect = document.createElement('select');
+  sideSelect.id = 'handicap-side';
+  sideSelect.style.cssText = [
+    "font:800 14px 'M PLUS Rounded 1c'",
+    'border:3px solid #1a2238',
+    'border-radius:10px',
+    'padding:4px 8px',
+    'background:#fff',
+  ].join(';');
+
+  const leftOption = document.createElement('option');
+  leftOption.value = 'left';
+  leftOption.textContent = '\u5de6\uff08\u9752\uff09';
+
+  const rightOption = document.createElement('option');
+  rightOption.value = 'right';
+  rightOption.textContent = '\u53f3\uff08\u8d64\uff09';
+
+  sideSelect.append(leftOption, rightOption);
+  sideSelect.value = state.handicap.youngerSide;
+
+  const suffix = document.createElement('span');
+  suffix.style.cssText = "font:800 14px 'M PLUS Rounded 1c';color:#1a2238;opacity:0.72";
+  suffix.textContent = '\u5074';
+
+  label.append(toggle, labelText);
+  ui.append(label, sideSelect, suffix);
+  hostWait.appendChild(ui);
+}
+
+function getHandicapSettings() {
+  const toggle = document.getElementById('handicap-toggle');
+  const sideSelect = document.getElementById('handicap-side');
+  const youngerSide = sideSelect && sideSelect.value === 'right' ? 'right' : 'left';
+
+  return {
+    enabled: Boolean(toggle && toggle.checked),
+    youngerSide,
+  };
+}
+
+function applyHandicap() {
+  state.handicap = getHandicapSettings();
+
+  if (state.role === 'host') {
+    sendToGuest({
+      t: 'handicap',
+      type: 'handicap',
+      enabled: state.handicap.enabled,
+      youngerSide: state.handicap.youngerSide,
+    });
+  }
+
+  if (state.screen === 'game') {
+    render();
+  }
+}
+
+function initHandicapUi() {
+  ensureHandicapUi();
+
+  const toggle = document.getElementById('handicap-toggle');
+  const sideSelect = document.getElementById('handicap-side');
+  if (!toggle || !sideSelect || toggle.dataset.handicapBound === '1') return;
+
+  toggle.dataset.handicapBound = '1';
+  sideSelect.dataset.handicapBound = '1';
+  toggle.addEventListener('change', applyHandicap);
+  sideSelect.addEventListener('change', applyHandicap);
+}
+
+function isHandicapMessage(data) {
+  return data && (data.t === 'handicap' || data.type === 'handicap');
+}
+
+function handleHandicapMessage(data) {
+  const youngerSide = data.youngerSide === 'right' ? 'right' : 'left';
+
+  state.handicap = {
+    enabled: Boolean(data.enabled),
+    youngerSide,
+  };
+
+  if (state.screen === 'game') {
+    render();
+  }
+}
+
+initHandicapUi();
+document.addEventListener('DOMContentLoaded', initHandicapUi);
 </script>
 </body>
 </html>
