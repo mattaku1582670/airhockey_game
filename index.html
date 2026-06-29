@@ -1341,16 +1341,7 @@ function connectAsGuest(code) {
     conn.on('open', onConnectionEstablished);
     conn.on('data', handleHostMessage);
     conn.on('close', showDisconnect);
-    conn.on('error', (err) => {
-      if (err && err.type === 'peer-unavailable') {
-        alert('あいことばが ちがうかも...もういちど たしかめてね');
-        state.inputDigits = [];
-        updateInputSlots();
-        showConnectStep('guestInput');
-      } else {
-        showDisconnect();
-      }
-    });
+    conn.on('error', showDisconnect);
   });
 
   peer.on('error', (err) => {
