@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - claude/qr-display-goal-detection-f1r0e0
   workflow_dispatch:
 
 # Pages へのデプロイに必要な権限
