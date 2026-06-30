@@ -268,18 +268,24 @@ html, body {
 }
 #qrcode-wrap {
   margin-top: 6px;
+  background: #fff;
   border: 3px solid var(--c-ink);
-  border-radius: 10px;
   box-shadow: 0 3px 0 var(--c-ink);
-  overflow: hidden;
-  width: 96px;
-  height: 96px;
+  /* 角を丸めたりクリップしたりせず、QR全体（四隅の検出パターン含む）を表示する */
+  border-radius: 0;
+  padding: 10px;            /* 白い余白（クワイエットゾーン）を確保して読み取りやすく */
+  box-sizing: content-box;
+  width: 128px;
+  height: 128px;
   flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 #qrcode-wrap canvas, #qrcode-wrap img {
   display: block;
-  width: 96px !important;
-  height: 96px !important;
+  width: 128px !important;
+  height: 128px !important;
 }
 
 /* 2c guest input */
@@ -1298,11 +1304,11 @@ function displayRoomCode(code) {
   if (code && typeof QRCode !== 'undefined') {
     new QRCode(wrap, {
       text: window.location.href,
-      width: 96,
-      height: 96,
+      width: 128,
+      height: 128,
       colorDark: '#1a2238',
       colorLight: '#ffffff',
-      correctLevel: QRCode.CorrectLevel.M,
+      correctLevel: QRCode.CorrectLevel.H,
     });
   }
 }
@@ -1639,10 +1645,12 @@ function updatePhysics() {
     p.vy = -Math.abs(p.vy);
   }
 
+  const leftGoalLine = padX + GOAL_DEPTH_NORM;
   const leftGoalTop = (1 - leftGoalWidth) / 2;
   const leftGoalBot = leftGoalTop + leftGoalWidth;
-  if (p.x - r < padX + GOAL_DEPTH_NORM) {
-    if (p.y > leftGoalTop && p.y < leftGoalBot) {
+  if (p.x - r < leftGoalLine) {
+    // ゴール判定: パックの中心がゴールラインを越えた＝半分以上が通過したとき
+    if (p.x < leftGoalLine && p.y > leftGoalTop && p.y < leftGoalBot) {
       onGoal('guest');
       return;
     }
@@ -1652,10 +1660,12 @@ function updatePhysics() {
     }
   }
 
+  const rightGoalLine = 1 - padX - GOAL_DEPTH_NORM;
   const rightGoalTop = (1 - rightGoalWidth) / 2;
   const rightGoalBot = rightGoalTop + rightGoalWidth;
-  if (p.x + r > 1 - padX - GOAL_DEPTH_NORM) {
-    if (p.y > rightGoalTop && p.y < rightGoalBot) {
+  if (p.x + r > rightGoalLine) {
+    // ゴール判定: パックの中心がゴールラインを越えた＝半分以上が通過したとき
+    if (p.x > rightGoalLine && p.y > rightGoalTop && p.y < rightGoalBot) {
       onGoal('host');
       return;
     }
